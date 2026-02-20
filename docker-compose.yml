@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  # FastAPI + Worker
+  sam-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:             
+      - .env
+    volumes:
+      # Maps local folders so your files persist if the container restarts
+      - ./assets:/app/assets
+      - ./tasks:/app/tasks
+      - ./temp:/app/temp
+      - ./checkpoints:/app/checkpoints
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Cloudflare
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - sam-api
+    # This command reads the TUNNEL_TOKEN environment variable automatically
+    command: tunnel run 
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}

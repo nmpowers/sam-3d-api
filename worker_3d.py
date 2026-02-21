@@ -27,7 +27,7 @@ def update_ticket(task_id: str, status: str, output_file: str = None, error: str
 def run_task(task_id, img_path, mask_path):
     update_ticket(task_id, "processing")
     try:
-        pipeline = Inference("checkpoints/hf/pipeline.yaml", compile=False)
+        pipeline = Inference("checkpoints/hf/checkpoints/pipeline.yaml", compile=False)
         img_rgb = Image.open(img_path).convert("RGB")
         mask = Image.open(mask_path).convert("L") 
         

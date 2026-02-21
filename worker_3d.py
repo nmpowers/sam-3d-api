@@ -3,6 +3,7 @@ import os
 import json
 import traceback
 from PIL import Image
+import numpy as np
 
 # Prevent spconv/CUDA from auto-tuning and crashing
 os.environ["SPCONV_TUNE_DEVICE"] = "0"
@@ -28,9 +29,12 @@ def run_task(task_id, img_path, mask_path):
     update_ticket(task_id, "processing")
     try:
         pipeline = Inference("checkpoints/hf/checkpoints/pipeline.yaml", compile=False)
-        img_rgb = Image.open(img_path).convert("RGB")
-        mask = Image.open(mask_path).convert("L") 
         
+        # FIX: Convert the PIL Images into NumPy math arrays!
+        img_rgb = np.array(Image.open(img_path).convert("RGB"))
+        mask = np.array(Image.open(mask_path).convert("L")) 
+        
+        # Hand the arrays to the AI
         output = pipeline(img_rgb, mask, seed=42)
         
         output_file = f"assets/{task_id}.ply"
@@ -42,6 +46,3 @@ def run_task(task_id, img_path, mask_path):
     finally:
         if os.path.exists(img_path): os.remove(img_path)
         if os.path.exists(mask_path): os.remove(mask_path)
-
-if __name__ == "__main__":
-    run_task(sys.argv[1], sys.argv[2], sys.argv[3])

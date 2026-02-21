@@ -19,7 +19,7 @@ from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
 # Load the model globally so it doesn't reload on every web request
-device = "cuda" if torch.cude.is_available() else "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 sam3_model = build_sam3_image_model(
     checkpoint_path="checkpoints/sam3.pt", 

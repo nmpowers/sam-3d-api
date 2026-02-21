@@ -13,6 +13,7 @@ import base64
 import io
 import torch
 from PIL import Image
+import sys
 
 # Import SAM 3 
 from sam3.model_builder import build_sam3_image_model
@@ -98,8 +99,8 @@ async def generate_3d(payload: dict = Body(...)):
     with open(f"tasks/{task_id}.json", "w") as f:
         json.dump({"task_id": task_id, "status": "queued"}, f)
     
-    # 2. Spawn the isolated GPU worker (does not block the server!)
-    subprocess.Popen(["python", "worker_3d.py", task_id, img_path, mask_path])
+    # 2. Spawn the isolated GPU worker using the exact active Python path
+    subprocess.Popen([sys.executable, "worker_3d.py", task_id, img_path, mask_path])
     
     # 3. Respond instantly
     return {"task_id": task_id, "status": "queued"}

@@ -42,6 +42,8 @@ def run_task(task_id, img_path, mask_path):
         
         update_ticket(task_id, "completed", output_file=output_file)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         update_ticket(task_id, "failed", error=str(e))
     finally:
         if os.path.exists(img_path): os.remove(img_path)

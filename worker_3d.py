@@ -8,6 +8,10 @@ from PIL import Image
 os.environ["SPCONV_TUNE_DEVICE"] = "0"
 os.environ["SPCONV_ALGO_TIME_LIMIT"] = "0"
 
+# --- FIX: Patch Meta's hardcoded Conda assumption ---
+if "CONDA_PREFIX" not in os.environ:
+    os.environ["CONDA_PREFIX"] = "/usr/local/cuda"
+
 import torch
 # (Assume SAM 3D repo is cloned into external/sam-3d-objects)
 sys.path.append("external/sam-3d-objects/notebook")

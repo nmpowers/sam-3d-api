@@ -1,28 +1,20 @@
-import os
 import subprocess
-from dotenv import load_dotenv
+import time
 
-# 1. Load the .env file safely
-load_dotenv()
-
-cf_token = os.getenv("CF_TUNNEL_TOKEN")
-
-# Strip any accidental quotes or spaces the user might have saved in the .env
-if cf_token:
-    cf_token = cf_token.strip().strip('"').strip("'")
-else:
-    print("ERROR: Could not find CF_TUNNEL_TOKEN in the .env file!")
-    exit(1)
-
-print(f"Token loaded successfully! Starts with: {cf_token[:10]}...")
-
-# 2. Launch FastAPI in the background
 print("Starting SAM 3D API...")
+# 1. Launch FastAPI in the background
 api_process = subprocess.Popen(["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"])
 
-# 3. Launch Cloudflare Tunnel
-print("Starting Cloudflare Tunnel...")
-cf_process = subprocess.Popen(["cloudflared", "tunnel", "run", "--token", cf_token])
+# Give the API a second to boot up before linking the tunnel
+time.sleep(2)
+
+print("\n=========================================================")
+print("Starting Free Cloudflare Quick Tunnel...")
+print("LOOK FOR THE LINK ENDING IN '.trycloudflare.com' BELOW")
+print("=========================================================\n")
+
+# 2. Launch the Quick Tunnel (No token required!)
+cf_process = subprocess.Popen(["cloudflared", "tunnel", "--url", "http://localhost:8000"])
 
 try:
     # Keep the script running so you can see the logs

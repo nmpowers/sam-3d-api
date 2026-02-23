@@ -49,20 +49,17 @@ RUN git clone https://github.com/facebookresearch/sam-3d-objects.git external/sa
 # Since we are in the 'base' env, 'pip' just works and sees all the Conda packages
 WORKDIR /app/external/sam-3d-objects
 
-RUN if [ -f "./patching/hydra" ]; then \
-        chmod +x ./patching/hydra && \
-        ./patching/hydra; \
-    else \
-        echo "No hydra patch found, skipping."; \
-    fi
-
 RUN sed -i 's/==/>=/g' pyproject.toml && \
     sed -i 's/auto-gptq>=0.7.1/auto-gptq/' pyproject.toml
 
+# Sanitize requirements.txt 
+# - Fix auto_gptq (underscore) so it accepts the installed version
+# - Remove nvidia-cuda-nvcc (we already have it from the base image)
+# - Relax all '==' to '>=' to allow our newer CUDA 12.4 packages
 RUN sed -i 's/auto_gptq==0.7.1/auto_gptq/' requirements.txt && \
     sed -i '/nvidia-cuda-nvcc/d' requirements.txt && \
     sed -i 's/==/>=/g' requirements.txt && \
-    # Switch spconv to a version generic enough for our newer CUDA
+    # Also fix spconv-cu121 -> spconv (let pip find the right one for our CUDA)
     sed -i 's/spconv-cu121/spconv-cu120/' requirements.txt
 
 RUN pip install --no-build-isolation -e ".[dev]" \

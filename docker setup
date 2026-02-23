@@ -4,7 +4,7 @@ docker login
 # 2. Build for SAM 3
 # Note: CUDA 12.6 is backward compatible, but we set ARCH_LIST to be safe for RunPod.
 docker build \
-  -f Dockerfile.sam3 \
+  -f Dockerfile.sam \
   --build-arg HF_TOKEN="your_hugging_face_token_here" \
   --build-arg TORCH_CUDA_ARCH_LIST="Ampere;Ada" \
   -t nathanielpowers/arvr-3d-gen:v1 .

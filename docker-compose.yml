@@ -6,7 +6,7 @@ services:
     # If building locally, you can use 'build: .' instead of image
     # build:
     #   context: .
-    #   dockerfile: Dockerfile.sam3
+    #   dockerfile: Dockerfile.sam
     #   args:
     #     HF_TOKEN: ${HF_TOKEN}
     ports:

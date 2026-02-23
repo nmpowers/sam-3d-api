@@ -8,11 +8,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # install system basics (Cloudflared + Git + OpenGL)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget git build-essential ffmpeg libgl1-mesa-glx libglib2.0-0 \
-    && wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
-    && dpkg -i cloudflared-linux-amd64.deb \
-    && rm cloudflared-linux-amd64.deb \
+    wget \
+    curl \
+    git \
+    build-essential \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# install cloudflared
+# We use curl -L (follow redirects) and output to a specific filename
+RUN curl -L --output cloudflared-linux-amd64.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
+    && dpkg -i cloudflared-linux-amd64.deb \
+    && rm cloudflared-linux-amd64.deb
 
 ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS=true
 

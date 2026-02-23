@@ -1,0 +1,35 @@
+name: sam3d
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.12
+  # Install PyTorch, CUDA 12.4 (compatible with our base image)
+  - pytorch=2.5.1
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
+  # Basic Utilities
+  - numpy
+  - pillow
+  - requests
+  - huggingface_hub
+  - scipy
+  - tqdm
+  # Build Tools (Critical for SAM 3D compilation)
+  - ninja
+  - cmake
+  - setuptools
+  - wheel
+  - hatchling
+  - hatch-requirements-txt
+  # API Server
+  - fastapi
+  - uvicorn
+  - python-multipart
+  - pydantic
+  # use pip for the repos that don't have conda packages
+  - pip
+  - pip:
+    - plyfile

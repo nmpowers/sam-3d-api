@@ -2,8 +2,10 @@ import subprocess
 import time
 
 print("Starting SAM 3D API...")
+
+import sys 
 # 1. Launch FastAPI in the background
-api_process = subprocess.Popen(["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"])
+api_process = subprocess.Popen([sys.executable, "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"])
 
 # Give the API a second to boot up before linking the tunnel
 time.sleep(2)

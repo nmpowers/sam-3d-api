@@ -4,10 +4,9 @@ FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 # 2. System Configuration
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/miniconda3/bin:${PATH}"
-# Set CUDA_HOME explicitly (Split into its own line to be safe)
+# Global fallback for CUDA_HOME
 ENV CUDA_HOME="/usr/local/cuda"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
-# Force generic archs
 ENV TORCH_CUDA_ARCH_LIST="Ampere;Ada"
 
 # 3. System Dependencies (Apt)
@@ -24,6 +23,7 @@ RUN wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/la
     && bash Miniforge3.sh -b -p /root/miniconda3 && rm Miniforge3.sh
 
 # 6. Install Core AI Stack (Conda)
+# We install PyTorch & CUDA 12.4 here.
 RUN conda install -y -c pytorch -c nvidia \
     python=3.12 \
     pytorch=2.5.1 \
@@ -37,8 +37,11 @@ RUN conda install -y -c pytorch -c nvidia \
     wheel
 
 # 7. Install "Hard" Dependencies from Source
-# A. AutoGPTQ (Now CUDA_HOME is guaranteed to be set)
-RUN pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@v0.7.1
+# CRITICAL FIX: We force CUDA_HOME=/usr/local/cuda INLINE.
+# This ensures AutoGPTQ finds the 'nvcc' compiler in the system, not the empty Conda one.
+
+# A. AutoGPTQ
+RUN CUDA_HOME=/usr/local/cuda pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@v0.7.1
 
 # B. NVDiffrast
 RUN pip install --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
@@ -73,11 +76,12 @@ RUN pip install -e .
 # Install SAM 3D Objects
 WORKDIR /app/external/sam-3d-objects
 
-# Apply Hydra Patch
+# Apply Hydra Patch (if script exists)
 RUN if [ -f "./patching/hydra" ]; then \
         chmod +x ./patching/hydra && ./patching/hydra; \
     fi
 
+# Use --no-deps so it doesn't fight with our unified requirements
 RUN pip install --no-deps -e .
 
 # 10. Final Setup

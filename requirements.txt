@@ -1,0 +1,16 @@
+# --- Web API & Utilities ---
+fastapi
+uvicorn
+pydantic
+python-multipart
+requests
+huggingface_hub
+
+# --- Image Processing ---
+numpy
+pillow
+
+# --- 3D & Math Utilities ---
+# Basic deps needed by  worker
+scipy
+tqdm

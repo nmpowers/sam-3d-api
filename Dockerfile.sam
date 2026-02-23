@@ -53,16 +53,9 @@ RUN pip install -e .
 
 # Install API Dependencies
 WORKDIR /app
-# Manually installing requirements instead of copying a file to ensure version compatibility
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    python-multipart \
-    pydantic \
-    redis \
-    pillow \
-    numpy \
-    huggingface_hub
+COPY requirements.txt .
+# installing requirements
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy Application Code
 COPY . .

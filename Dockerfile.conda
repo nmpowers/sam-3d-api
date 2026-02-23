@@ -52,6 +52,16 @@ WORKDIR /app/external/sam-3d-objects
 RUN sed -i 's/==/>=/g' pyproject.toml && \
     sed -i 's/auto-gptq>=0.7.1/auto-gptq/' pyproject.toml
 
+# Sanitize requirements.txt 
+# - Fix auto_gptq (underscore) so it accepts the installed version
+# - Remove nvidia-cuda-nvcc (we already have it from the base image)
+# - Relax all '==' to '>=' to allow our newer CUDA 12.4 packages
+RUN sed -i 's/auto_gptq==0.7.1/auto_gptq/' requirements.txt && \
+    sed -i '/nvidia-cuda-nvcc/d' requirements.txt && \
+    sed -i 's/==/>=/g' requirements.txt && \
+    # Also fix spconv-cu121 -> spconv (let pip find the right one for our CUDA)
+    sed -i 's/spconv-cu121/spconv-cu120/' requirements.txt
+
 RUN pip install --no-build-isolation -e ".[dev]" \
     && pip install --no-build-isolation -e ".[p3d]" \
     && pip install --no-build-isolation -e ".[inference]"

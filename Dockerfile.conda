@@ -49,15 +49,16 @@ RUN git clone https://github.com/facebookresearch/sam-3d-objects.git external/sa
 # Since we are in the 'base' env, 'pip' just works and sees all the Conda packages
 WORKDIR /app/external/sam-3d-objects
 
-RUN sed -i 's/==/>=/g' setup.py && \
-    sed -i 's/auto-gptq>=0.7.1/auto-gptq/' setup.py
+RUN sed -i 's/==/>=/g' pyproject.toml && \
+    sed -i 's/auto-gptq>=0.7.1/auto-gptq/' pyproject.toml
 
 RUN pip install --no-build-isolation -e ".[dev]" \
     && pip install --no-build-isolation -e ".[p3d]" \
     && pip install --no-build-isolation -e ".[inference]"
 
 WORKDIR /app/external/sam3
-RUN if [ -f setup.py ]; then sed -i 's/==/>=/g' setup.py; fi
+RUN if [ -f pyproject.toml ]; then sed -i 's/==/>=/g' pyproject.toml; fi && \
+    if [ -f setup.py ]; then sed -i 's/==/>=/g' setup.py; fi
 RUN pip install -e .
 
 # 7. Final Setup

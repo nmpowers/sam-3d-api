@@ -1,0 +1,15 @@
+# Ignore the massive model weights 
+checkpoints/
+external/
+
+# Ignore temp files
+temp/
+tasks/
+assets/
+
+# Ignore system/git files
+.git/
+.env
+__pycache__/
+*.pyc
+*.pyo

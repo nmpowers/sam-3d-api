@@ -20,6 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
+RUN wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb && \
+    dpkg -i cloudflared-linux-arm64.deb && \
+    rm cloudflared-linux-arm64.deb
+
 # Install Miniconda for Python 3.12 (REQUIRED by SAM 3)
 RUN wget \
     https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \

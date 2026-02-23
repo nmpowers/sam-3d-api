@@ -2,13 +2,13 @@
 FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
 # 2. System Configuration
-ENV DEBIAN_FRONTEND=noninteractive \
-    PATH="/root/miniconda3/bin:${PATH}" \
-    # Set CUDA_HOME so custom extensions (AutoGPTQ, Kaolin) find the compiler
-    CUDA_HOME="/usr/local/cuda" \
-    LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}" \
-    # Force generic archs to prevent "arch mismatch" errors
-    TORCH_CUDA_ARCH_LIST="Ampere;Ada"
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/root/miniconda3/bin:${PATH}"
+# Set CUDA_HOME explicitly (Split into its own line to be safe)
+ENV CUDA_HOME="/usr/local/cuda"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+# Force generic archs
+ENV TORCH_CUDA_ARCH_LIST="Ampere;Ada"
 
 # 3. System Dependencies (Apt)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -24,8 +24,6 @@ RUN wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/la
     && bash Miniforge3.sh -b -p /root/miniconda3 && rm Miniforge3.sh
 
 # 6. Install Core AI Stack (Conda)
-# We install PyTorch 2.5.1 & CUDA 12.4 here. These are the "Source of Truth".
-# We DO NOT let pip install these later.
 RUN conda install -y -c pytorch -c nvidia \
     python=3.12 \
     pytorch=2.5.1 \
@@ -39,33 +37,30 @@ RUN conda install -y -c pytorch -c nvidia \
     wheel
 
 # 7. Install "Hard" Dependencies from Source
-# These libraries need to compile against OUR PyTorch/CUDA.
-
-# A. AutoGPTQ (From Source to match CUDA 12.4)
+# A. AutoGPTQ (Now CUDA_HOME is guaranteed to be set)
 RUN pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@v0.7.1
 
 # B. NVDiffrast
 RUN pip install --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
 
-# C. Kaolin (From Source)
+# C. Kaolin
 RUN pip install --no-build-isolation kaolin==0.17.0
 
-# D. PyTorch3D (From Git, matching requirements.p3d.txt)
+# D. PyTorch3D
 RUN pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@75ebeeaea0908c5527e7b1e305fbc7681382db47"
 
-# E. Flash Attention (Matching requirements.p3d.txt)
+# E. Flash Attention
 RUN pip install --no-build-isolation flash-attn==2.8.3
 
-# F. MoGe & GSplat (From Git)
+# F. MoGe & GSplat
 RUN pip install git+https://github.com/microsoft/MoGe.git@a8c37341bc0325ca99b9d57981cc3bb2bd3e255b \
     && pip install git+https://github.com/nerfstudio-project/gsplat.git@2323de5905d5e90e035f792fe65bad0fedd413e7
 
 # 8. Install General Dependencies
-# We use our unified list, bypassing the messy repo requirements.
 COPY requirements_unified.txt .
 RUN pip install --no-build-isolation -r requirements_unified.txt
 
-# 9. Install The Repositories (The "Override" Step)
+# 9. Install The Repositories
 WORKDIR /app
 RUN mkdir -p external
 RUN git clone https://github.com/facebookresearch/sam3.git external/sam3
@@ -76,11 +71,9 @@ WORKDIR /app/external/sam3
 RUN pip install -e .
 
 # Install SAM 3D Objects
-# CRITICAL: We use --no-deps because we have already installed everything it needs.
-# This prevents it from checking PyPI and complaining about versions.
 WORKDIR /app/external/sam-3d-objects
 
-# Apply Hydra Patch (from script logic)
+# Apply Hydra Patch
 RUN if [ -f "./patching/hydra" ]; then \
         chmod +x ./patching/hydra && ./patching/hydra; \
     fi

@@ -1,0 +1,81 @@
+# 1. Base Image: Must be CUDA 12.6 for SAM 3
+FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+# Add conda to path
+ENV PATH="/root/miniconda3/bin:${PATH}"
+
+# Install System Dependencies & Redis
+# 'libgl1-mesa-glx' and 'libglib2.0-0' are critical for OpenCV/Image processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    git \
+    build-essential \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda for Python 3.12 (REQUIRED by SAM 3)
+RUN wget \
+    https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+    && mkdir /root/.conda \
+    && bash Miniconda3-latest-Linux-x86_64.sh -b \
+    && rm -f Miniconda3-latest-Linux-x86_64.sh \
+    && conda install -y python=3.12
+
+WORKDIR /app
+
+# Install PyTorch 2.7 (REQUIRED by SAM 3)
+# Using the specific index URL from the README
+RUN pip install --no-cache-dir torch==2.7.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
+# Clone Repositories
+# We clone them into 'external' to match your worker_3d.py paths
+RUN mkdir -p external
+RUN git clone https://github.com/facebookresearch/sam3.git external/sam3
+RUN git clone https://github.com/facebookresearch/sam-3d-objects.git external/sam-3d-objects
+
+# Install SAM 3D Objects Dependencies
+# Installing these first as they are often complex (PyTorch3D etc)
+WORKDIR /app/external/sam-3d-objects
+RUN pip install -e ".[dev]" && \
+    pip install -e ".[p3d]" && \
+    pip install -e ".[inference]"
+
+# Install SAM 3 Dependencies
+WORKDIR /app/external/sam3
+RUN pip install -e .
+
+# Install API Dependencies
+WORKDIR /app
+# Manually installing requirements instead of copying a file to ensure version compatibility
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn \
+    python-multipart \
+    pydantic \
+    redis \
+    pillow \
+    numpy \
+    huggingface_hub
+
+# Copy Application Code
+COPY . .
+
+# Pre-download Models
+# Requires HF_TOKEN build argument
+ARG HF_TOKEN
+ENV HF_TOKEN=${HF_TOKEN}
+# This runs download_models.py to cache sam3.pt and sam-3d-objects inside the image
+RUN python download_models.py
+
+# Expose API Port
+EXPOSE 8000
+
+# Start Launcher
+CMD ["python", "launcher.py"]

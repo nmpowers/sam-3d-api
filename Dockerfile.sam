@@ -24,6 +24,8 @@ RUN wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/c
     dpkg -i cloudflared-linux-amd64.deb && \
     rm cloudflared-linux-amd64.deb
 
+ENV CONDA_PLUGINS_AUTO_ACCEPT_TOS = true
+
 # Install Miniconda for Python 3.12 (REQUIRED by SAM 3)
 RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
     && mkdir -p /root/.conda \ 

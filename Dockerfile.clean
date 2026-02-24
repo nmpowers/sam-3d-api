@@ -61,21 +61,19 @@ WORKDIR /app/external
 RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
-RUN conda env create -f environments/default.yml
-RUN conda init bash
-RUN conda activate sam3d-objects
+# --- CRITICAL FIXES FOR SAM 3D ---
+# 1. We SKIP 'conda env create' to keep everything in one place.
+# 2. We install build tools manually because --no-build-isolation needs them.
+RUN pip install hatchling hatch-requirements-txt editables
 
-# for pytorch/cuda dependencies
-RUN export PIP_EXTRA_INDEX_URL="https://pypi.ngc.nvidia.com https://download.pytorch.org/whl/cu121"
+# 3. We use --no-build-isolation to force it to use our PyTorch 2.7
+#    instead of trying to download old CUDA 12.1 versions.
+RUN pip install --no-build-isolation -e '.[dev]'
+RUN pip install --no-build-isolation -e '.[p3d]'
 
-# install sam3d-objects and core dependencies
-# pytorch3d dependency on pytorch is broken, this 2-step approach solves it
-RUN pip install -e '.[dev]'
-RUN pip install -e '.[p3d]'
-
-# for inference
-RUN export PIP_FIND_LINKS="https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu121.html"
-RUN pip install -e '.[inference]'
+# 4. Inference dependencies
+#    We do NOT set PIP_FIND_LINKS because those point to old PyTorch versions.
+RUN pip install --no-build-isolation -e '.[inference]'
 
 # Patching (As requested)
 RUN if [ -f "./patching/hydra" ]; then \

@@ -62,7 +62,7 @@ RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
 RUN conda env create -f environments/default.yml
-RUN conda init
+RUN conda init bash
 RUN conda activate sam3d-objects
 
 # for pytorch/cuda dependencies

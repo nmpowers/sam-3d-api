@@ -1,117 +1,99 @@
 # -----------------------------------------------------------------------------
-# 1. Base Image: CUDA 12.6 (Required by SAM 3)
+# 1. Base Image: CUDA 12.4 (The "Golden" Version for SAM 2 & 3D)
 # -----------------------------------------------------------------------------
-FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 
-# Set environment variables to non-interactive (prevents prompts)
+# System Config
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/miniconda3/bin:${PATH}"
+# CUDA_HOME is required for compiling custom extensions (like SAM 2 kernels)
 ENV CUDA_HOME="/usr/local/cuda"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
-
-# Architecture list for compiling extensions (Ampere/Ada support)
+# Architectures: Ampere (A100/3090/4090) and Ada (40-series)
 ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
 
 # -----------------------------------------------------------------------------
-# 2. System Prerequisites (Linux 64-bit setup)
+# 2. System Prerequisites
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    curl \
-    git \
-    build-essential \
-    ninja-build \
-    ffmpeg \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    ca-certificates \
+    wget curl git build-essential ninja-build ffmpeg libgl1-mesa-glx libglib2.0-0 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
-# 3. Python Environment Setup (SAM 3 Requirement: Python 3.12)
+# 3. Python Setup (Miniforge)
 # -----------------------------------------------------------------------------
-# We use Miniforge to get a clean Python 3.12 environment
 RUN wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh" \
     && bash Miniforge3.sh -b -p /root/miniconda3 \
     && rm Miniforge3.sh \
     && conda install -y python=3.12 numpy ninja cmake
 
 # -----------------------------------------------------------------------------
-# 4. Install PyTorch 2.7 (SAM 3 Requirement)
+# 4. Install PyTorch 2.5.1 (The Compatibility Layer)
 # -----------------------------------------------------------------------------
-# We install strictly from the index provided in your instructions.
-RUN pip install torch==2.7.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# This version works for BOTH SAM 2 and SAM 3D Objects. No more conflicts!
+RUN pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 
 # -----------------------------------------------------------------------------
-# 5. Install SAM 3 (From Instructions)
+# 5. Install SAM 2 (The New Foundation Model)
 # -----------------------------------------------------------------------------
 WORKDIR /app/external
-RUN git clone https://github.com/facebookresearch/sam3.git
-WORKDIR /app/external/sam3
+RUN git clone https://github.com/facebookresearch/sam2.git
+WORKDIR /app/external/sam2
 
-# Install package and optional dependencies as requested
-RUN pip install -e .
-RUN pip install -e ".[notebooks]"
-RUN pip install -e ".[train,dev]"
+# Install SAM 2
+# Note: This will compile a custom CUDA kernel. It might take a few minutes.
+# We ignore build isolation so it sees our PyTorch 2.5.1.
+RUN pip install --no-build-isolation -e .
+RUN pip install --no-build-isolation -e ".[notebooks]"
+
+# Download SAM 2 Checkpoints (SAM 2.1 Hiera models)
+WORKDIR /app/external/sam2/checkpoints
+RUN ./download_ckpts.sh
 
 # -----------------------------------------------------------------------------
-# 6. Install SAM 3D (From Instructions - Adapted for PyTorch 2.7)
+# 6. Install SAM 3D Objects (Now Compatible!)
 # -----------------------------------------------------------------------------
 WORKDIR /app/external
 RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
-# --- CRITICAL FIXES FOR SAM 3D ---
-# 1. We SKIP 'conda env create' to keep everything in one place.
-# 2. We install build tools manually because --no-build-isolation needs them.
-RUN pip install hatchling hatch-requirements-txt editables
+# Install Build Tools (still needed for some extensions)
+RUN pip install hatchling hatch-requirements-txt editables packaging
 
-RUN pip install "numpy<2"
-
-RUN pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@v0.7.1
-
-# 3. Install Group Dependencies MANUALLY (Skipping the main repo install)
-#    We read the requirements files directly to get the lists, but we install them
-#    independently so they don't trigger the version check on AutoGPTQ.
+# Install Dependencies
+# Since we are on PyTorch 2.5.1, we can install normal versions of packages!
+# We don't need 'numpy<2' hacks or 'BUILD_CUDA_EXT=0' anymore.
 RUN pip install --no-build-isolation -r requirements.dev.txt
 RUN pip install --no-build-isolation -r requirements.p3d.txt
+# Note: requirements.inference.txt usually asks for older stuff, so we might need
+# to be careful, but typically 'kaolin' builds fine on 2.5.1 now.
 RUN pip install --no-build-isolation -r requirements.inference.txt
 
-# 4. Install the SAM 3D Code with --no-deps
-#    This is the magic flag. It installs the package code WITHOUT checking
-#    if 'auto-gptq==0.7.1' matches '0.7.1+cu126'. It just assumes you did it right.
+# Install SAM 3D Repo
 RUN pip install --no-build-isolation --no-deps -e .
 
-# Patching (As requested)
+# Patching (If required by the repo)
 RUN if [ -f "./patching/hydra" ]; then \
-        chmod +x ./patching/hydra && \
-        ./patching/hydra; \
+        chmod +x ./patching/hydra && ./patching/hydra; \
     fi
 
 # -----------------------------------------------------------------------------
-# 7. Checkpoints Setup (HuggingFace)
+# 7. Final Setup
 # -----------------------------------------------------------------------------
-# Install HF CLI as requested
 RUN pip install 'huggingface-hub[cli]<1.0'
 
-# We do NOT run the download here because it requires a token.
-# Instead, we set up the download script to run at container start.
 WORKDIR /app
 COPY download_models.py .
 COPY launcher.py .
-COPY api.py .
+# Ensure you update your python scripts to use "sam2" imports instead of "sam3"
+COPY api.py . 
 COPY worker_3d.py .
 
-# -----------------------------------------------------------------------------
-# 8. Final Config
-# -----------------------------------------------------------------------------
 ARG HF_TOKEN
 ENV HF_TOKEN=${HF_TOKEN}
 
+# Run the downloader for the SAM 3D checkpoints
 RUN python download_models.py
 
-# Expose ports for API
 EXPOSE 8000
-
-# Run the launcher
 CMD ["python", "launcher.py"]

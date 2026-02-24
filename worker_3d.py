@@ -4,67 +4,81 @@ import json
 import traceback
 from PIL import Image
 import numpy as np
-import traceback
 
 # Prevent spconv/CUDA from auto-tuning and crashing
 os.environ["SPCONV_TUNE_DEVICE"] = "0"
 os.environ["SPCONV_ALGO_TIME_LIMIT"] = "0"
 
-# --- FIX: Patch Meta's hardcoded Conda assumption ---
 if "CONDA_PREFIX" not in os.environ:
     os.environ["CONDA_PREFIX"] = "/usr/local/cuda"
 
 import torch
-# (Assume SAM 3D repo is cloned into external/sam-3d-objects)
-sys.path.append("external/sam-3d-objects/notebook")
+
+# Add the SAM 3D repo to path so we can import 'Inference'
+SAM3D_REPO_PATH = "external/sam-3d-objects"
+NOTEBOOK_PATH = os.path.join(SAM3D_REPO_PATH, "notebook")
+sys.path.append(NOTEBOOK_PATH)
+
 try:
     from inference import Inference
 except ImportError as e:
-    print(f"Error importing Inference from SAM 3D repo: {e}")
-    print("Ensure 'external/sam-3d-objects/notebook/inference.py' exists and is accessible.")
+    print(f"Error importing Inference: {e}")
+    print(f"Checked path: {NOTEBOOK_PATH}")
     sys.exit(1)
 
 def update_ticket(task_id: str, status: str, output_file: str = None, error: str = None):
-    """Writes status updates to a JSON file for the API to read"""
     data = {"task_id": task_id, "status": status}
-    if output_file: 
-        data["output_file"] = output_file
-    if error: 
-        data["error"] = error
+    if output_file: data["output_file"] = output_file
+    if error: data["error"] = error
 
     temp_file = f"tasks/{task_id}.json.tmp"
     with open(temp_file, "w") as f:
         json.dump(data, f)
-    os.replace(temp_file, f"tasks/{task_id}.json")  # Atomic update
+    os.replace(temp_file, f"tasks/{task_id}.json")
 
 def run_task(task_id, img_path, mask_path):
     update_ticket(task_id, "processing")
     try:
-        # Load pipeline 
-        # SAM 3D has its own checkpoints directory
-        pipeline_path = "checkpoints/hf/checkpoints/pipeline.yaml"
+        # --- PATH CONFIGURATION ---
+        # Check multiple possible locations for the pipeline config
+        possible_paths = [
+            "checkpoints/hf/checkpoints/pipeline.yaml", # Original path
+            "checkpoints/pipeline.yaml",               # Docker simplified path
+            "/app/external/sam-3d-objects/checkpoints/pipeline.yaml" # Absolute path
+        ]
         
-        if not os.path.exists(pipeline_path):
-            raise FileNotFoundError(f"Pipeline config not found: {pipeline_path}")
+        pipeline_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                pipeline_path = p
+                print(f"Found pipeline config at: {p}")
+                break
         
+        if not pipeline_path:
+            raise FileNotFoundError(f"Could not find pipeline.yaml in {possible_paths}")
+        
+        # Load Pipeline
         pipeline = Inference(pipeline_path, compile=False)
 
-        # Convert the PIL Images into NumPy math arrays
+        # Load Images
         img_rgb = np.array(Image.open(img_path).convert("RGB"))
         mask = np.array(Image.open(mask_path).convert("L")) 
         
-        # Hand the arrays to the model
+        # Run 3D Generation
         output = pipeline(img_rgb, mask, seed=42)
         
-        output_file = f"assets/{task_id}.ply" # save result
-        os.makedirs("assets", exist_ok=True) # make directory if it doesn't exist
+        # Save Result
+        output_file = f"assets/{task_id}.ply"
+        os.makedirs("assets", exist_ok=True)
         output["gs"].save_ply(output_file)
         
         update_ticket(task_id, "completed", output_file=output_file)
+
     except Exception as e:
         traceback.print_exc()
         update_ticket(task_id, "failed", error=str(e))
     finally:
+        # Cleanup temp inputs
         if os.path.exists(img_path): os.remove(img_path)
         if os.path.exists(mask_path): os.remove(mask_path)
 

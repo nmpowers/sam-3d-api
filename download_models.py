@@ -29,15 +29,23 @@ login(token=hf_token)
 # Ensure the destination directories exist
 os.makedirs("checkpoints/hf", exist_ok=True)
 
-# 2. Download SAM 3 (Single File)
-print("Downloading SAM 3...")
+# 2. Download SAM 2.1 Large (Replaces SAM 3)
+# We download both the weights (.pt) and the config (.yaml) to be safe.
+print("Downloading SAM 2.1 Large...")
 hf_hub_download(
-    repo_id="facebook/sam3",
-    filename="sam3.pt",
+    repo_id="facebook/sam2.1-hiera-large",
+    filename="sam2.1_hiera_large.pt",
+    local_dir="checkpoints"
+)
+
+hf_hub_download(
+    repo_id="facebook/sam2.1-hiera-large",
+    filename="sam2.1_hiera_l.yaml",
     local_dir="checkpoints"
 )
 
 # 3. Download SAM 3D Objects (Entire Repository)
+# This handles the pipeline.yaml and other 3D-specific assets
 print("Downloading SAM 3D Objects...")
 snapshot_download(
     repo_id="facebook/sam-3d-objects",

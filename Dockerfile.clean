@@ -58,7 +58,7 @@ RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
 # Install Build Tools (still needed for some extensions)
-RUN pip install hatchling hatch-requirements-txt editables packaging
+RUN pip install hatchling hatch-requirements-txt editables packaging setuptools
 
 # Install Dependencies
 # Since we are on PyTorch 2.5.1, we can install normal versions of packages!

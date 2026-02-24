@@ -68,9 +68,10 @@ RUN pip install --no-build-isolation -r requirements.p3d.txt
 # Note: requirements.inference.txt usually asks for older stuff, so we might need
 # to be careful, but typically 'kaolin' builds fine on 2.5.1 now.
 
-RUN sed -i '/kaolin/d' requirements.inference.txt && \
+RUN pip install --upgrade setuptools && \
+    sed -i '/kaolin/d' requirements.inference.txt && \
     pip install --no-build-isolation git+https://github.com/NVIDIAGameWorks/kaolin.git@v0.17.0
-
+    
 RUN pip install --no-build-isolation -r requirements.inference.txt
 
 # Install SAM 3D Repo

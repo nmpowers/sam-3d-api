@@ -61,17 +61,19 @@ WORKDIR /app/external
 RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
-# Note: We SKIP 'mamba env create' because we are already in the correct Python 3.12 env.
-# Note: We SKIP 'PIP_EXTRA_INDEX_URL' because we already have PyTorch 2.7 installed.
+RUN conda env create -f environments/default.yml
+RUN conda activate sam3d-objects
 
-# Install dependencies (This will compile extensions against PyTorch 2.7)
+# for pytorch/cuda dependencies
+RUN export PIP_EXTRA_INDEX_URL="https://pypi.ngc.nvidia.com https://download.pytorch.org/whl/cu121"
+
+# install sam3d-objects and core dependencies
+# pytorch3d dependency on pytorch is broken, this 2-step approach solves it
 RUN pip install -e '.[dev]'
 RUN pip install -e '.[p3d]'
 
-# Inference Dependencies
-# Note: We IGNORE the 'PIP_FIND_LINKS' from the instructions because that points
-# to an old PyTorch 2.5 version that would break our environment.
-# We let pip build 'kaolin' and other tools from source instead.
+# for inference
+RUN export PIP_FIND_LINKS="https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu121.html"
 RUN pip install -e '.[inference]'
 
 # Patching (As requested)

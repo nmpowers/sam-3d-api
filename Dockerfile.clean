@@ -64,6 +64,8 @@ WORKDIR /app/external/sam-3d-objects
 # Note: We SKIP 'mamba env create' because we are already in the correct Python 3.12 env.
 # Note: We SKIP 'PIP_EXTRA_INDEX_URL' because we already have PyTorch 2.7 installed.
 
+RUN pip install hatchling hatch-requirements-txt
+
 # Install dependencies (This will compile extensions against PyTorch 2.7)
 # We use --no-build-isolation to ensure it sees our PyTorch install.
 RUN pip install --no-build-isolation -e '.[dev]'

@@ -1,95 +1,110 @@
-# 1. Base Image (CUDA 12.4 for SAM 3 compatibility)
-FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+# -----------------------------------------------------------------------------
+# 1. Base Image: CUDA 12.6 (Required by SAM 3)
+# -----------------------------------------------------------------------------
+FROM nvidia/cuda:12.6.0-cudnn-devel-ubuntu22.04
 
-# 2. System Configuration
+# Set environment variables to non-interactive (prevents prompts)
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/miniconda3/bin:${PATH}"
-# Global fallback for CUDA_HOME
 ENV CUDA_HOME="/usr/local/cuda"
 ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
-ENV TORCH_CUDA_ARCH_LIST="Ampere;Ada"
 
-# 3. System Dependencies (Apt)
+# Architecture list for compiling extensions (Ampere/Ada support)
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
+
+# -----------------------------------------------------------------------------
+# 2. System Prerequisites (Linux 64-bit setup)
+# -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget curl git build-essential ffmpeg libgl1-mesa-glx libglib2.0-0 ca-certificates \
+    wget \
+    curl \
+    git \
+    build-essential \
+    ninja-build \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# 4. Install Cloudflared
-RUN curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb \
-    && dpkg -i cloudflared.deb && rm cloudflared.deb
-
-# 5. Install Miniforge (Python 3.12)
+# -----------------------------------------------------------------------------
+# 3. Python Environment Setup (SAM 3 Requirement: Python 3.12)
+# -----------------------------------------------------------------------------
+# We use Miniforge to get a clean Python 3.12 environment
 RUN wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh" \
-    && bash Miniforge3.sh -b -p /root/miniconda3 && rm Miniforge3.sh
+    && bash Miniforge3.sh -b -p /root/miniconda3 \
+    && rm Miniforge3.sh \
+    && conda install -y python=3.12 numpy ninja cmake
 
-# 6. Install Core AI Stack (Conda)
-# We install PyTorch & CUDA 12.4 here.
-RUN conda install -y -c pytorch -c nvidia \
-    python=3.12 \
-    pytorch=2.5.1 \
-    torchvision \
-    torchaudio \
-    pytorch-cuda=12.4 \
-    numpy \
-    ninja \
-    cmake \
-    setuptools \
-    wheel
+# -----------------------------------------------------------------------------
+# 4. Install PyTorch 2.7 (SAM 3 Requirement)
+# -----------------------------------------------------------------------------
+# We install strictly from the index provided in your instructions.
+RUN pip install torch==2.7.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
-# 7. Install "Hard" Dependencies from Source
-# CRITICAL FIX: We force CUDA_HOME=/usr/local/cuda INLINE.
-# This ensures AutoGPTQ finds the 'nvcc' compiler in the system, not the empty Conda one.
-
-# A. AutoGPTQ
-RUN CUDA_HOME=/usr/local/cuda pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@v0.7.1
-
-# B. NVDiffrast
-RUN pip install --no-build-isolation git+https://github.com/NVlabs/nvdiffrast.git
-
-# C. Kaolin
-RUN pip install --no-build-isolation kaolin==0.17.0
-
-# D. PyTorch3D
-RUN pip install --no-build-isolation "git+https://github.com/facebookresearch/pytorch3d.git@75ebeeaea0908c5527e7b1e305fbc7681382db47"
-
-# E. Flash Attention
-RUN pip install --no-build-isolation flash-attn==2.8.3
-
-# F. MoGe & GSplat
-RUN pip install git+https://github.com/microsoft/MoGe.git@a8c37341bc0325ca99b9d57981cc3bb2bd3e255b \
-    && pip install git+https://github.com/nerfstudio-project/gsplat.git@2323de5905d5e90e035f792fe65bad0fedd413e7
-
-# 8. Install General Dependencies
-COPY requirements_unified.txt .
-RUN pip install --no-build-isolation -r requirements_unified.txt
-
-# 9. Install The Repositories
-WORKDIR /app
-RUN mkdir -p external
-RUN git clone https://github.com/facebookresearch/sam3.git external/sam3
-RUN git clone https://github.com/facebookresearch/sam-3d-objects.git external/sam-3d-objects
-
-# Install SAM 3
+# -----------------------------------------------------------------------------
+# 5. Install SAM 3 (From Instructions)
+# -----------------------------------------------------------------------------
+WORKDIR /app/external
+RUN git clone https://github.com/facebookresearch/sam3.git
 WORKDIR /app/external/sam3
-RUN pip install -e .
 
-# Install SAM 3D Objects
+# Install package and optional dependencies as requested
+RUN pip install -e .
+RUN pip install -e ".[notebooks]"
+RUN pip install -e ".[train,dev]"
+
+# -----------------------------------------------------------------------------
+# 6. Install SAM 3D (From Instructions - Adapted for PyTorch 2.7)
+# -----------------------------------------------------------------------------
+WORKDIR /app/external
+RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
-# Apply Hydra Patch (if script exists)
+# Note: We SKIP 'mamba env create' because we are already in the correct Python 3.12 env.
+# Note: We SKIP 'PIP_EXTRA_INDEX_URL' because we already have PyTorch 2.7 installed.
+
+# Install dependencies (This will compile extensions against PyTorch 2.7)
+# We use --no-build-isolation to ensure it sees our PyTorch install.
+RUN pip install --no-build-isolation -e '.[dev]'
+RUN pip install --no-build-isolation -e '.[p3d]'
+
+# Inference Dependencies
+# Note: We IGNORE the 'PIP_FIND_LINKS' from the instructions because that points
+# to an old PyTorch 2.5 version that would break our environment.
+# We let pip build 'kaolin' and other tools from source instead.
+RUN pip install --no-build-isolation -e '.[inference]'
+
+# Patching (As requested)
 RUN if [ -f "./patching/hydra" ]; then \
-        chmod +x ./patching/hydra && ./patching/hydra; \
+        chmod +x ./patching/hydra && \
+        ./patching/hydra; \
     fi
 
-# Use --no-deps so it doesn't fight with our unified requirements
-RUN pip install --no-deps -e .
+# -----------------------------------------------------------------------------
+# 7. Checkpoints Setup (HuggingFace)
+# -----------------------------------------------------------------------------
+# Install HF CLI as requested
+RUN pip install 'huggingface-hub[cli]<1.0'
 
-# 10. Final Setup
+# We do NOT run the download here because it requires a token.
+# Instead, we set up the download script to run at container start.
 WORKDIR /app
-COPY . .
+COPY download_models.py .
+COPY launcher.py .
+COPY api.py .
+COPY worker_3d.py .
+
+# -----------------------------------------------------------------------------
+# 8. Final Config
+# -----------------------------------------------------------------------------
 ARG HF_TOKEN
 ENV HF_TOKEN=${HF_TOKEN}
+
 RUN python download_models.py
 
+# Expose ports for API
 EXPOSE 8000
+
+# Run the launcher
 CMD ["python", "launcher.py"]

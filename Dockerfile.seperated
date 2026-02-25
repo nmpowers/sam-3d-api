@@ -73,7 +73,7 @@ RUN pip install --no-build-isolation -r requirements.dev.txt
 RUN pip install --no-build-isolation -r requirements.p3d.txt
 
 # Install Kaolin (Now compiles easily on PyTorch 2.4!)
-RUN pip install kaolin==0.16.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+RUN pip install kaolin==0.17.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
 
 # Install remaining inference deps
 RUN pip install --no-build-isolation -r requirements.inference.txt

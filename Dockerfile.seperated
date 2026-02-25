@@ -73,6 +73,8 @@ ENV FORCE_CUDA="1"
 ENV PIP_EXTRA_INDEX_URL="https://pypi.ngc.nvidia.com https://download.pytorch.org/whl/cu121"
 ENV PIP_FIND_LINKS="https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu121.html"
 
+RUN pip install hatchling hatch-requirements-txt editables packaging setuptools wheel cython psutil ninja bpy
+
 # 4. INSTALL PIP DEPENDENCIES (As per README)
 #    We use --no-build-isolation to ensure it sees the conda packages.
 RUN pip install --no-build-isolation -e '.[dev]'

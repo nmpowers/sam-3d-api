@@ -51,7 +51,7 @@ RUN pip install -e .
 # 5. ENVIRONMENT B: SAM 3D (The Worker)
 #    We create a completely separate environment named 'sam3d'.
 # -----------------------------------------------------------------------------
-RUN conda create -n sam3d python=3.10 -y
+RUN conda create -n sam3d python=3.11 -y
 
 # Make sure we use the 'sam3d' pip for all subsequent commands
 SHELL ["conda", "run", "-n", "sam3d", "/bin/bash", "-c"]
@@ -69,7 +69,7 @@ RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
 # Install Build Tools (Inside sam3d env)
-RUN pip install hatchling hatch-requirements-txt editables packaging setuptools wheel cython psutil ninja
+RUN pip install hatchling hatch-requirements-txt editables packaging setuptools wheel cython psutil ninja bpy
 
 # Install Project Deps
 RUN pip install --no-build-isolation -r requirements.dev.txt

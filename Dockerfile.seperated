@@ -1,0 +1,106 @@
+# -----------------------------------------------------------------------------
+# 1. Base Image: CUDA 12.4 (Compatible with both via compat libs)
+# -----------------------------------------------------------------------------
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH="/root/miniconda3/bin:${PATH}"
+ENV CUDA_HOME="/usr/local/cuda"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+
+# -----------------------------------------------------------------------------
+# 2. System Prerequisites
+# -----------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl git build-essential ninja-build ffmpeg libgl1-mesa-glx libglib2.0-0 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Cloudflared (For the tunnel)
+RUN curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && \
+    dpkg -i cloudflared.deb && \
+    rm cloudflared.deb
+
+# -----------------------------------------------------------------------------
+# 3. Setup Conda (Miniforge)
+# -----------------------------------------------------------------------------
+RUN wget -qO Miniforge3.sh "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh" \
+    && bash Miniforge3.sh -b -p /root/miniconda3 \
+    && rm Miniforge3.sh
+
+# -----------------------------------------------------------------------------
+# 4. ENVIRONMENT A: SAM 2 (The API Host)
+#    We install this into the 'base' environment.
+# -----------------------------------------------------------------------------
+# SAM 2 works best with Python 3.11 or 3.12
+RUN conda install -y python=3.12 numpy ninja cmake
+
+# Install PyTorch 2.5.1 (Stable) for SAM 2
+# SAM 2 does NOT need the nightly build like SAM 3 did.
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Install API Dependencies
+RUN pip install fastapi uvicorn python-multipart requests pillow huggingface_hub
+
+# Install SAM 2
+WORKDIR /app/external
+RUN git clone https://github.com/facebookresearch/sam2.git
+WORKDIR /app/external/sam2
+RUN pip install -e .
+
+# -----------------------------------------------------------------------------
+# 5. ENVIRONMENT B: SAM 3D (The Worker)
+#    We create a completely separate environment named 'sam3d'.
+# -----------------------------------------------------------------------------
+RUN conda create -n sam3d python=3.10 -y
+
+# Make sure we use the 'sam3d' pip for all subsequent commands
+SHELL ["conda", "run", "-n", "sam3d", "/bin/bash", "-c"]
+
+# Install PyTorch 2.4 (Stable) for SAM 3D
+# This version is compatible with Kaolin/AutoGPTQ without hacking.
+RUN pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+
+# Install SAM 3D Dependencies
+WORKDIR /app/external
+RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
+WORKDIR /app/external/sam-3d-objects
+
+# Install Build Tools (Inside sam3d env)
+RUN pip install hatchling hatch-requirements-txt editables packaging setuptools wheel cython
+
+# Install Project Deps
+RUN pip install -r requirements.dev.txt
+RUN pip install -r requirements.p3d.txt
+
+# Install Kaolin (Now compiles easily on PyTorch 2.4!)
+RUN pip install kaolin==0.16.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+
+# Install remaining inference deps
+RUN pip install -r requirements.inference.txt
+
+# Install the repo itself
+RUN pip install -e .
+
+# Reset SHELL to default (base env)
+SHELL ["/bin/bash", "-c"]
+
+# -----------------------------------------------------------------------------
+# 6. Final Setup
+# -----------------------------------------------------------------------------
+WORKDIR /app
+COPY download_models.py .
+COPY launcher.py .
+COPY api.py .
+COPY worker_3d.py .
+
+# Pass token for model download
+ARG HF_TOKEN
+ENV HF_TOKEN=${HF_TOKEN}
+
+# Run the download script (Using the BASE env python)
+RUN python download_models.py
+
+EXPOSE 8000
+
+# Default command runs the launcher in the BASE environment
+CMD ["python", "launcher.py"]

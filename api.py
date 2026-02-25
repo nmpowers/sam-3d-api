@@ -15,15 +15,20 @@ from PIL import Image
 import numpy as np
 import torch
 
-# --- NEW: SAM 2 IMPORTS ---
+# --- SAM 2 IMPORTS (Running in Main Environment A) ---
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 # --- CONFIGURATION ---
-# These paths must match where your Dockerfile/download script puts files
-CHECKPOINT_PATH = "/app/external/sam2/checkpoints/sam2.1_hiera_large.pt"
-CONFIG_PATH = "configs/sam2.1/sam2.1_hiera_l.yaml" 
+# NEW / CORRECT (Matches download_models.py):
+CHECKPOINT_PATH = "/app/checkpoints/sam2.1_hiera_large.pt"
+CONFIG_PATH = "/app/checkpoints/sam2.1_hiera_l.yaml"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# --- WORKER CONFIGURATION ---
+# Path to the ISOLATED Python environment for SAM 3D
+WORKER_PYTHON_EXE = "/root/miniconda3/envs/sam3d/bin/python"
+WORKER_SCRIPT = "/app/worker_3d.py"
 
 app = FastAPI(title="SAM 2 + SAM 3D Ticketing API")
 app.add_middleware(
@@ -39,11 +44,8 @@ for d in ["assets", "tasks", "temp"]:
     os.makedirs(d, exist_ok=True)
 
 # --- LOAD SAM 2 MODEL GLOBALLY ---
-# We load the weights once (heavy), but we create the 'Predictor' 
-# (lightweight wrapper) on-demand for each request to avoid state conflicts.
 print(f"Loading SAM 2 model from {CHECKPOINT_PATH}...")
 try:
-    # build_sam2 returns the core model (nn.Module)
     sam2_model = build_sam2(CONFIG_PATH, CHECKPOINT_PATH, device=DEVICE)
     print("SAM 2 model loaded successfully!")
 except Exception as e:
@@ -65,42 +67,30 @@ def run_inference_sync(img_rgb, x, y):
     Blocking GPU Inference for SAM 2.
     """
     with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):
-        # 1. Create a fresh predictor for this request (thread-safe)
         predictor = SAM2ImagePredictor(sam2_model)
-        
-        # 2. Set the image (Encodes the image features)
-        # SAM 2 expects a NumPy array (H, W, 3)
         img_np = np.array(img_rgb)
         predictor.set_image(img_np)
         
-        # 3. Predict mask from point prompt
-        # point_coords expects shape (N, 2), labels (N)
         masks, scores, logits = predictor.predict(
             point_coords=np.array([[x, y]]),
-            point_labels=np.array([1]), # 1 = foreground click
+            point_labels=np.array([1]), 
             multimask_output=True
         )
     
-    # 4. Process Output (Pick the mask with highest IO score)
     best_mask_idx = np.argmax(scores)
     best_mask = masks[best_mask_idx]
-
-    # Convert boolean mask to uint8 (0 or 255)
     mask_uint8 = (best_mask * 255).astype(np.uint8)
     return Image.fromarray(mask_uint8, mode='L')
 
 @app.post("/segment")
 async def segment_image(payload: dict = Body(...)):
     try:
-        # Load raw image
         img = load_b64(payload["image_b64"]).convert("RGB")
         x, y = payload["x"], payload["y"]
 
-        # Run inference in thread pool to keep API responsive
         loop = asyncio.get_event_loop()
         mask_img = await loop.run_in_executor(None, run_inference_sync, img, x, y)
         
-        # Encode response
         buf = io.BytesIO()
         mask_img.save(buf, format="PNG")
         mask_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -114,7 +104,7 @@ async def segment_image(payload: dict = Body(...)):
 @app.post("/generate-3d")
 async def generate_3d(payload: dict = Body(...)):
     """
-    Spawns the worker_3d.py process.
+    Spawns the worker_3d.py process using the ISOLATED 'sam3d' environment.
     """
     task_id = str(uuid.uuid4())
 
@@ -128,12 +118,18 @@ async def generate_3d(payload: dict = Body(...)):
         with open(f"tasks/{task_id}.json", "w") as f:
             json.dump({"task_id": task_id, "status": "queued"}, f)
 
-        # Spawn worker (ensure it uses the same python env)
-        subprocess.Popen([sys.executable, "worker_3d.py", task_id, img_path, mask_path])
+        # --- CRITICAL CHANGE: USE ISOLATED ENV ---
+        # Instead of sys.executable (which is Python 3.12 / SAM 2),
+        # we use the hardcoded path to the 'sam3d' environment (Python 3.10 / SAM 3D)
+        cmd = [WORKER_PYTHON_EXE, WORKER_SCRIPT, task_id, img_path, mask_path]
+        
+        print(f"Spawning worker: {' '.join(cmd)}")
+        subprocess.Popen(cmd)
 
         return {"task_id": task_id, "status": "queued"}
     
     except Exception as e:
+        traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/status/{task_id}")

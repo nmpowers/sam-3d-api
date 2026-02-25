@@ -15,6 +15,7 @@ if "CONDA_PREFIX" not in os.environ:
 import torch
 
 # Add the SAM 3D repo to path so we can import 'Inference'
+# Since we are running from /app, this relative path works fine.
 SAM3D_REPO_PATH = "external/sam-3d-objects"
 NOTEBOOK_PATH = os.path.join(SAM3D_REPO_PATH, "notebook")
 sys.path.append(NOTEBOOK_PATH)
@@ -40,11 +41,12 @@ def run_task(task_id, img_path, mask_path):
     update_ticket(task_id, "processing")
     try:
         # --- PATH CONFIGURATION ---
-        # Check multiple possible locations for the pipeline config
+        # Updated to prioritize the most likely location in the Split-Brain Dockerfile
         possible_paths = [
-            "checkpoints/hf/checkpoints/pipeline.yaml", # Original path
-            "checkpoints/pipeline.yaml",               # Docker simplified path
-            "/app/external/sam-3d-objects/checkpoints/pipeline.yaml" # Absolute path
+            "/app/checkpoints/hf/checkpoints/pipeline.yaml", # Default download structure
+            "/app/checkpoints/hf/pipeline.yaml",             # Flattened download structure
+            "checkpoints/hf/checkpoints/pipeline.yaml",      # Relative path
+            "external/sam-3d-objects/checkpoints/pipeline.yaml" # Fallback to repo default
         ]
         
         pipeline_path = None
@@ -55,9 +57,10 @@ def run_task(task_id, img_path, mask_path):
                 break
         
         if not pipeline_path:
-            raise FileNotFoundError(f"Could not find pipeline.yaml in {possible_paths}")
+            raise FileNotFoundError(f"Could not find pipeline.yaml. Checked: {possible_paths}")
         
         # Load Pipeline
+        # Compile=False is safer for the split environment to avoid JIT errors
         pipeline = Inference(pipeline_path, compile=False)
 
         # Load Images
@@ -65,6 +68,7 @@ def run_task(task_id, img_path, mask_path):
         mask = np.array(Image.open(mask_path).convert("L")) 
         
         # Run 3D Generation
+        print(f"Starting inference for Task {task_id}...")
         output = pipeline(img_rgb, mask, seed=42)
         
         # Save Result
@@ -72,6 +76,7 @@ def run_task(task_id, img_path, mask_path):
         os.makedirs("assets", exist_ok=True)
         output["gs"].save_ply(output_file)
         
+        print(f"Task {task_id} completed successfully.")
         update_ticket(task_id, "completed", output_file=output_file)
 
     except Exception as e:
@@ -88,5 +93,5 @@ if __name__ == "__main__":
         sys.exit(1)
     
     task_id, img_path, mask_path = sys.argv[1], sys.argv[2], sys.argv[3]
-    print(f"Worker started for Task ID: {task_id}")
+    print(f"Worker started for Task ID: {task_id} using Python: {sys.executable}")
     run_task(task_id, img_path, mask_path)

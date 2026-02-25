@@ -76,8 +76,7 @@ RUN sed -i '/kaolin/d' requirements.inference.txt && \
     pip install --no-build-isolation git+https://github.com/NVIDIAGameWorks/kaolin.git@v0.17.0
 
 RUN pip install --no-build-isolation -r requirements.inference.txt
-RUN pip install pytorch3d --index-url https://download.pytorch.org/whl/cu124
-RUN pip install auto_gptq==0.7.1
+RUN pip install --no-build-isolation auto_gptq==0.7.1
 # Install SAM 3D Repo
 RUN pip install --no-build-isolation -e .
 

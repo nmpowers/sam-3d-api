@@ -78,7 +78,7 @@ RUN sed -i '/kaolin/d' requirements.inference.txt && \
 RUN pip install --no-build-isolation -r requirements.inference.txt
 
 # Install SAM 3D Repo
-RUN pip install --no-build-isolation --no-deps -e .
+RUN pip install --no-build-isolation -e .
 
 # Patching (If required by the repo)
 RUN if [ -f "./patching/hydra" ]; then \

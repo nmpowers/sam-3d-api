@@ -27,7 +27,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # --- WORKER CONFIGURATION ---
 # Path to the ISOLATED Python environment for SAM 3D
-WORKER_PYTHON_EXE = "/root/miniconda3/envs/sam3d/bin/python"
+WORKER_PYTHON_EXE = "/root/miniconda3/envs/sam3d-objects/bin/python"
 WORKER_SCRIPT = "/app/worker_3d.py"
 
 app = FastAPI(title="SAM 2 + SAM 3D Ticketing API")

@@ -51,40 +51,39 @@ RUN pip install -e .
 # 5. ENVIRONMENT B: SAM 3D (The Worker)
 #    We create a completely separate environment named 'sam3d'.
 # -----------------------------------------------------------------------------
-RUN conda create -n sam3d python=3.11 -y
-
-# Make sure we use the 'sam3d' pip for all subsequent commands
-SHELL ["conda", "run", "-n", "sam3d", "/bin/bash", "-c"]
-
-ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX"
-ENV FORCE_CUDA=1
-
-# Install PyTorch 2.4 (Stable) for SAM 3D
-# This version is compatible with Kaolin/AutoGPTQ without hacking.
-RUN pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
-
-# Install SAM 3D Dependencies
 WORKDIR /app/external
 RUN git clone https://github.com/facebookresearch/sam-3d-objects.git
 WORKDIR /app/external/sam-3d-objects
 
-# Install Build Tools (Inside sam3d env)
-RUN pip install hatchling hatch-requirements-txt editables packaging setuptools wheel cython psutil ninja bpy
+# 1. Create Environment from the Official YAML
+#    This handles Python version, Blender, and system deps automatically.
+#    (We use 'conda' because Miniforge includes it, and it parses the mamba yaml fine)
+RUN conda env create -f environments/default.yml
 
-# Install Project Deps
-RUN pip install --no-build-isolation -r requirements.dev.txt
-RUN pip install --no-build-isolation -r requirements.p3d.txt
+# 2. ACTIVATE THE ENVIRONMENT
+#    We switch the shell so all future commands run inside 'sam3d-objects'
+SHELL ["conda", "run", "-n", "sam3d-objects", "/bin/bash", "-c"]
 
-# Install Kaolin (Now compiles easily on PyTorch 2.4!)
-RUN pip install kaolin==0.17.0 -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu121.html
+# 3. SET BUILD VARIABLES
+#    We still need these to prevent the "IndexError" during compilation on Docker
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX"
+ENV FORCE_CUDA="1"
 
-# Install remaining inference deps
-RUN pip install --no-build-isolation -r requirements.inference.txt
+#    Official Repo Variables for PyTorch and Kaolin
+ENV PIP_EXTRA_INDEX_URL="https://pypi.ngc.nvidia.com https://download.pytorch.org/whl/cu121"
+ENV PIP_FIND_LINKS="https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu121.html"
 
-# Install the repo itself
-RUN pip install --no-build-isolation -e .
+# 4. INSTALL PIP DEPENDENCIES (As per README)
+#    We use --no-build-isolation to ensure it sees the conda packages.
+RUN pip install --no-build-isolation -e '.[dev]'
+RUN pip install --no-build-isolation -e '.[p3d]'
+RUN pip install --no-build-isolation -e '.[inference]'
 
-# Reset SHELL to default (base env)
+# 5. APPLY PATCHES
+#    Run the included patch script for Hydra
+RUN chmod +x ./patching/hydra && ./patching/hydra
+
+# Reset Shell to default (base env)
 SHELL ["/bin/bash", "-c"]
 
 # -----------------------------------------------------------------------------

@@ -56,7 +56,7 @@ RUN conda create -n sam3d python=3.10 -y
 # Make sure we use the 'sam3d' pip for all subsequent commands
 SHELL ["conda", "run", "-n", "sam3d", "/bin/bash", "-c"]
 
-ENV TORCH_CUDA_ARCH_LIST = "8.0;8.6;8.9+PTX"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9+PTX"
 ENV FORCE_CUDA=1
 
 # Install PyTorch 2.4 (Stable) for SAM 3D

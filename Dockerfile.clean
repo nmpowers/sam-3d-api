@@ -76,7 +76,7 @@ RUN sed -i '/kaolin/d' requirements.inference.txt && \
     pip install --no-build-isolation git+https://github.com/NVIDIAGameWorks/kaolin.git@v0.17.0
 
 RUN pip install --no-build-isolation -r requirements.inference.txt
-RUN pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git@0.7.1
+RUN pip install --no-build-isolation git+https://github.com/AutoGPTQ/AutoGPTQ.git
 # Install SAM 3D Repo
 RUN pip install --no-build-isolation -e .
 

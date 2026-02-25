@@ -22,7 +22,7 @@ from sam2.sam2_image_predictor import SAM2ImagePredictor
 # --- CONFIGURATION ---
 # NEW / CORRECT (Matches download_models.py):
 CHECKPOINT_PATH = "/app/checkpoints/sam2.1_hiera_large.pt"
-CONFIG_PATH = "/app/checkpoints/sam2.1_hiera_l.yaml"
+CONFIG_PATH = "configs/sam2.1/sam2.1_hiera_l.yaml"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # --- WORKER CONFIGURATION ---

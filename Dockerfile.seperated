@@ -88,6 +88,9 @@ RUN chmod +x ./patching/hydra && ./patching/hydra
 # Fix bug in 3D model API
 RUN sed -i 's/if mask_points.isfinite().max() == 0:/if mask_points.numel() == 0 or mask_points.isfinite().max() == 0:/g' /app/external/sam-3d-objects/sam3d_objects/data/dataset/tdfy/img_and_mask_transforms.py
 
+# Fix mesh rendering
+RUN sed -i 's/self.rendering_engine = .*/self.rendering_engine = "nvdiffrast"/g' /app/external/sam-3d-objects/sam3d_objects/pipeline/inference_pipeline.py
+
 # Reset Shell to default (base env)
 SHELL ["/bin/bash", "-c"]
 

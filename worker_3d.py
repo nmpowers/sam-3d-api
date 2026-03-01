@@ -25,14 +25,17 @@ except ImportError as e:
     print(f"Error importing Inference: {e}")
     sys.exit(1)
 
-def update_ticket(task_id: str, status: str, output_file: str = None, error: str = None):
+def update_ticket(task_id: str, status: str, error: str = None, **kwargs):
     data = {"task_id": task_id, "status": status}
-    if output_file: data["output_file"] = output_file
+
     if error: data["error"] = error
+
+    data.update(kwargs)
 
     temp_file = f"tasks/{task_id}.json.tmp"
     with open(temp_file, "w") as f:
         json.dump(data, f)
+
     os.replace(temp_file, f"tasks/{task_id}.json")
 
 def smart_crop(img_rgb, mask_uint8, margin=0.1):
@@ -115,14 +118,23 @@ def run_task(task_id, img_path, mask_path):
         # Run 3D Generation
         print(f"Starting inference for Task {task_id}...")
         output = pipeline(img_rgb, mask, seed=42)
-        
-        # Save Result
-        output_file = f"assets/{task_id}.ply"
+
+
         os.makedirs("assets", exist_ok=True)
-        output["gs"].save_ply(output_file)
+        ply_file = f"assets/{task_id}.ply"
+        glb_file = f"assets/{task_id}.glb"
+
+        # Save splat
+        output["gs"].save_ply(ply_file)
+        print(f"Saved PLY to {ply_file}")
+
+        # Save Mesh
+        mesh = output["glb"]
+        mesh.export(glb_file)
+        print(f"Saved GLB to {glb_file}")
         
         print(f"Task {task_id} completed successfully.")
-        update_ticket(task_id, "completed", output_file=output_file)
+        update_ticket(task_id, "completed", ply_file=ply_file, glb_file=glb_file)
 
     except Exception as e:
         traceback.print_exc()

@@ -133,7 +133,14 @@ async def generate_3d(payload: dict = Body(...)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/status/{task_id}")
-async def check_status(task_id: str):
+async def check_status(task_id: str, format: str = "glb"):
+    """
+    Checks task status and serves the requested format.
+    Usage: /status/{task_id}?format=glb OR /status/{task_id}?format=ply
+    """
+    if format not in ["glb", "ply"]:
+        return JSONResponse(status_code=400, content={"error": "Invalid format requested. Use 'glb' or 'ply'."})
+    
     status_file = f"tasks/{task_id}.json"
     if not os.path.exists(status_file):
         raise HTTPException(status_code=404, detail="Task not found")
@@ -143,14 +150,17 @@ async def check_status(task_id: str):
             data = json.load(f)
         
         if data["status"] == "completed":
-            if os.path.exists(data.get("output_file", "")):
+            file_key = f"{format}_file" 
+            target_file = data.get(file_key)
+            
+            if target_file and os.path.exists(target_file):
                 return FileResponse(
-                    data["output_file"], 
+                    target_file, 
                     media_type="application/octet-stream", 
-                    filename=f"{task_id}.ply"
+                    filename=f"{task_id}.{format}"
                 )
             else:
-                return JSONResponse(content={"status": "error", "error": "Output file missing"})
+                return JSONResponse(content={"status": "error", "error": f"{format.upper()} file missing on server."})
             
         return JSONResponse(content=data)
     except json.JSONDecodeError:

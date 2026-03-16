@@ -7,6 +7,7 @@ import sys
 import subprocess
 import asyncio
 import traceback
+import requests
 
 from fastapi import FastAPI, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
@@ -104,7 +105,7 @@ async def segment_image(payload: dict = Body(...)):
 @app.post("/generate-3d")
 async def generate_3d(payload: dict = Body(...)):
     """
-    Spawns the worker_3d.py process using the ISOLATED 'sam3d' environment.
+    Saves the files and triggers the internal SAM 3D worker API process.
     """
     task_id = str(uuid.uuid4())
 
@@ -118,14 +119,15 @@ async def generate_3d(payload: dict = Body(...)):
         with open(f"tasks/{task_id}.json", "w") as f:
             json.dump({"task_id": task_id, "status": "queued"}, f)
 
-        # --- CRITICAL CHANGE: USE ISOLATED ENV ---
         # Instead of sys.executable (which is Python 3.12 / SAM 2),
         # we use the hardcoded path to the 'sam3d' environment (Python 3.10 / SAM 3D)
-        cmd = [WORKER_PYTHON_EXE, WORKER_SCRIPT, task_id, img_path, mask_path]
+        worker_url = f"http://localhost:8001/process_3d?task_id={task_id}&img_path={img_path}&mask_path={mask_path}"
         
-        print(f"Spawning worker: {' '.join(cmd)}")
-        subprocess.Popen(cmd)
-
+        try:
+            requests.post(worker_url, timeout=0.5)
+        except:
+            pass # worker process is in the background
+        
         return {"task_id": task_id, "status": "queued"}
     
     except Exception as e:

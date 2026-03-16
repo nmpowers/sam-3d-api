@@ -81,6 +81,9 @@ RUN pip install --no-build-isolation -e '.[dev]'
 RUN pip install --no-build-isolation -e '.[p3d]'
 RUN pip install --no-build-isolation -e '.[inference]'
 
+# install server deps in isolated environment
+RUN pip install fastapi uvicorn python-multipart
+
 # 5. APPLY PATCHES
 #    Run the included patch script for Hydra
 RUN chmod +x ./patching/hydra && ./patching/hydra

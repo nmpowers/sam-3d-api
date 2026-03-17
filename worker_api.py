@@ -2,7 +2,7 @@ import sys
 import os
 import json
 import traceback
-from PTL import Image
+from PIL import Image
 import numpy as np
 from fastapi import FastAPI, BackgroundTasks
 import torch

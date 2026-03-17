@@ -129,7 +129,7 @@ async def generate_3d(payload: dict = Body(...)):
 
         try:
             # giving 3 seconds to see if failure still
-            response = requests.post(worker_url, json=worker_payload, timeout=3.0)
+            response = requests.post(worker_url, json=worker_payload, timeout=1.0)
             
             # response for debug
             response.raise_for_status()

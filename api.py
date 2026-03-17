@@ -164,17 +164,25 @@ async def check_status(task_id: str, format: str = "glb"):
             data = json.load(f)
         
         if data["status"] == "completed":
+            # get absolute path to ensure correct file serving regardless of working directory
+            BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
             file_key = f"{format}_file" 
             target_file = data.get(file_key)
             
             if target_file and os.path.exists(target_file):
-                return FileResponse(
-                    target_file, 
-                    media_type="application/octet-stream", 
-                    filename=f"{task_id}.{format}"
-                )
-            else:
-                return JSONResponse(content={"status": "error", "error": f"{format.upper()} file missing on server."})
+                if not os.path.isabs(target_file):
+                    target_file = os.path.join(BASE_DIR, target_file)
+
+                if os.path.exists(target_file):    
+                    return FileResponse(
+                        target_file, 
+                        media_type="application/octet-stream", 
+                        filename=f"{task_id}.{format}"
+                    )
+                else:
+                    print(f"API ERROR: Could not find file on disk -> {target_file}")
+            return JSONResponse(content={"status": "error", "error": f"{format.upper()} file missing on server."})
             
         return JSONResponse(content=data)
     except json.JSONDecodeError:

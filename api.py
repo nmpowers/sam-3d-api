@@ -120,7 +120,7 @@ async def generate_3d(payload: dict = Body(...)):
             json.dump({"task_id": task_id, "status": "queued"}, f)
 
     
-        worker_url = "http://localhost:8001/process_3d"
+        worker_url = "http://localhost:8001/process-3d"
         worker_payload = {
             "task_id": task_id,
             "img_path": img_path,

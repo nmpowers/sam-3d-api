@@ -119,14 +119,26 @@ async def generate_3d(payload: dict = Body(...)):
         with open(f"tasks/{task_id}.json", "w") as f:
             json.dump({"task_id": task_id, "status": "queued"}, f)
 
-        # Instead of sys.executable (which is Python 3.12 / SAM 2),
-        # we use the hardcoded path to the 'sam3d' environment (Python 3.10 / SAM 3D)
-        worker_url = f"http://localhost:8001/process_3d?task_id={task_id}&img_path={img_path}&mask_path={mask_path}"
-        
+    
+        worker_url = "http://localhost:8001/process_3d"
+        worker_payload = {
+            "task_id": task_id,
+            "img_path": img_path,
+            "mask_path": mask_path
+        }
+
         try:
-            requests.post(worker_url, timeout=0.5)
-        except:
-            pass # worker process is in the background
+            # giving 3 seconds to see if failure still
+            response = requests.post(worker_url, json=worker_payload, timeout=3.0)
+            
+            # response for debug
+            response.raise_for_status()
+            print(f"Task {task_id} sent to worker successfully: {response.json()}")
+        except Exception as comm_error:
+            print(f"Error communicating with worker for task {task_id}: {comm_error}")
+            with open(f"tasks/{task_id}.json", "w") as f:
+                json.dump({"task_id": task_id, "status": "failed", "error": f"Worker communication failed: {comm_error}"}, f)
+            return JSONResponse(status_code=500, content={"error": f"Internal 3D Worker is offline or rejected the task: {comm_error}"})
         
         return {"task_id": task_id, "status": "queued"}
     

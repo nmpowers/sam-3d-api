@@ -6,6 +6,12 @@ from PTL import Image
 import numpy as np
 from fastapi import FastAPI, BackgroundTasks
 import torch
+from pydantic import BaseModel
+
+class TaskPayload(BaseModel):
+    task_id: str
+    img_path: str
+    mask_path: str
 
 # need to prevent CUDA from crashing with auto-tune
 os.environ["SPCONV_TUNE_DEVICE"] = "0"
@@ -107,7 +113,8 @@ def run_3d_generation(task_id: str, img_path: str, mask_path: str):
         if os.path.exists(mask_path): os.remove(mask_path)
 
 @app.post("/process-3d")
-async def process_3d(task_id: str, img_path: str, mask_path: str, background_tasks: BackgroundTasks):
+async def process_3d(payload: TaskPayload, background_tasks: BackgroundTasks):
     """Recieves the job from the main API and processess it in the background."""
-    background_tasks.add_task(run_3d_generation, task_id, img_path, mask_path)
+    print(f"Worker recieved task: {payload.task_id}")
+    background_tasks.add_task(run_3d_generation, payload.task_id, payload.img_path, payload.mask_path)
     return {"status": "accepted"}
